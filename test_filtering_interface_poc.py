@@ -23,7 +23,7 @@ class BinaryOperatorExpression:
         self.rhs = rhs
 
     def evaluate(self) -> str:
-        return f"{self.lhs.evaluate()} {self.op} {self.rhs.evaluate()}"
+        return f"({self.lhs.evaluate()}) {self.op} ({self.rhs.evaluate()})"
 
 
 class Literal(Expression):
@@ -46,26 +46,26 @@ def test_Literal():
 def test_EqualExpression(subtests):
     v1 = Literal(7)
     f1 = Literal("A")
-    with subtests.test(msg="A = 7"):
+    with subtests.test(msg="(A) = (7)"):
         eq1 = LogicalEqual(f1, v1)
-        assert eq1.evaluate() == "A = 7"
-    with subtests.test(msg="7 = A"):
+        assert eq1.evaluate() == "(A) = (7)"
+    with subtests.test(msg="((7) = (A)"):
         eq1 = LogicalEqual(v1, f1)
-        assert eq1.evaluate() == "7 = A"
-    with subtests.test(msg="A = A"):
+        assert eq1.evaluate() == "(7) = (A)"
+    with subtests.test(msg="(A) = (A)"):
         eq1 = LogicalEqual(f1, f1)
-        assert eq1.evaluate() == "A = A"
-    with subtests.test(msg="7 = 7"):
+        assert eq1.evaluate() == "(A) = (A)"
+    with subtests.test(msg="(7) = (7)"):
         eq1 = LogicalEqual(v1, v1)
-        assert eq1.evaluate() == "7 = 7"
+        assert eq1.evaluate() == "(7) = (7)"
 
-    with subtests.test(msg="7 = 7"):
+    with subtests.test(msg="(A = 7) = (B = 42)"):
         f2 = Literal("B")
         v2 = Literal("42")
         eq1 = LogicalEqual(f1, v1)
         eq2 = LogicalEqual(f2, v2)
         compound = LogicalEqual(eq1, eq2)
-        assert compound.evaluate() == "A = 7 = B = 42"
+        assert compound.evaluate() == "((A) = (7)) = ((B) = (42))"
 
 
 # @pytest.fixture()
