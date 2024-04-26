@@ -3,3 +3,7 @@ pytest-subtests
 pydantic
 pandas
 pandasql
+jupyterlab
+jupyterlab_vim
+pandasql
+pydantic
