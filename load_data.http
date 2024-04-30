@@ -1,0 +1,52 @@
+GET http://{{host}}:{{port}}/_cat/health
+
+### delete an index
+
+DELETE http://{{host}}:{{port}}/{{index}}?ignore_unavailable=true
+
+### create an index
+
+PUT http://{{host}}:{{port}}/{{index}}
+
+### define a schema (optional)
+
+PUT http://{{host}}:{{port}}/{{index}}/_mapping
+Content-Type: application/json
+
+{
+  "properties" : {
+    "title": {"type" :  "text"},
+    "desc": {"type" :  "text"},
+    "date": {"type" :  "date"},
+    "categories": {"type" :  "text"},
+    "ingredients": {"type" :  "text"},
+    "directions": {"type" :  "text"},
+    "calories": {"type" :  "float"},
+    "fat": {"type" :  "float"},
+    "protein": {"type" :  "float"},
+    "rating": {"type" :  "float"},
+    "sodium": {"type" :  "float"}
+  }
+}
+
+
+### bulk load data
+
+POST http://{{host}}:{{port}}/{{index}}/_bulk
+Content-Type: application/x-ndjson
+
+< /Users/rwk/Development/training/filtering_interface_poc/data/full_format_recipes.jsonl
+
+### display
+
+GET http://{{host}}:{{port}}/{{index}}/_count
+
+### display
+
+GET http://{{host}}:{{port}}/{{index}}/_search?size=3
+
+### display
+
+GET http://{{host}}:{{port}}/{{index}}/_doc/0
+
+

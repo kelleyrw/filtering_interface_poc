@@ -1,10 +1,14 @@
 from abc import ABC, abstractmethod
 from enum import Enum
 
+from pydantic import BaseModel
+from pydantic_core import from_json
+
 __ALL__ = [
     "Field",
     "Logical",
     "BinaryOperator",
+    "UnaryPrefixOperator",
 ]
 
 # ---------------------------------------------------------------------------- #
@@ -14,6 +18,11 @@ __ALL__ = [
 
 class UnsupportedTypeError(Exception):
     pass
+
+
+# ---------------------------------------------------------------------------- #
+# parsing models (not public facing)
+# ---------------------------------------------------------------------------- #
 
 
 # ---------------------------------------------------------------------------- #
@@ -27,10 +36,13 @@ class Expression(ABC):
     def evaluate(self) -> str:
         pass
 
+    # class _ExpressionParseBase(BaseModel):
+    #     expression_type: str
+
     # @abstractmethod
     # def from_json(self) -> str:
     #     pass
-    #
+
     # @abstractmethod
     # def to_json(self) -> str:
     #     pass
@@ -40,12 +52,17 @@ class Field(Expression):
     def __init__(self, value) -> None:
         self.value = value
 
-    @classmethod
-    def from_json(cls, json_value):
-        pass
-
     def evaluate(self) -> str:
         return self.value
+
+    def __eq__(self, other):
+        return isinstance(other, Field) and self.value == other.value
+
+    @classmethod
+    def parse_json(cls, json_value):
+        args: dict = from_json(json_value, allow_partial=True)
+        args.pop("expression_type", None)
+        return cls(**args)
 
 
 class Literal(Expression):
@@ -74,6 +91,15 @@ class Literal(Expression):
 
         return result
 
+    @classmethod
+    def parse_json(cls, json_value):
+        args: dict = from_json(json_value, allow_partial=True)
+        args.pop("expression_type", None)
+        return cls(**args)
+
+    def __eq__(self, other):
+        return isinstance(other, Literal) and self.value == other.value
+
 
 # ---------------------------------------------------------------------------- #
 # Binary Operator
@@ -94,16 +120,31 @@ class BinaryOperator(Enum):
 class BinaryOperation(Expression):
     def __init__(
         self,
-        op: BinaryOperator,
+        op: BinaryOperator | str,
         lhs: Expression | str | float | int | bool,
         rhs: Expression | str | float | int | bool,
     ):
-        self.op = op
+        self.op = op if isinstance(op, BinaryOperator) else BinaryOperator[op]
         self.lhs = lhs if isinstance(lhs, Expression) else Literal(lhs)
         self.rhs = rhs if isinstance(rhs, Expression) else Literal(rhs)
 
     def evaluate(self) -> str:
         return f"({self.lhs.evaluate()}) {self.op.value} ({self.rhs.evaluate()})"
+
+    @classmethod
+    def parse_json(cls, json_value):
+        args: dict = from_json(json_value, allow_partial=True)
+        op = BinaryOperator[args["op"]]
+        lhs = cls.ExpressionParser.parse_json(args["lhs"])
+        rhs = cls.ExpressionParser.parse_json(args["rhs"])
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, BinaryOperation)
+            and self.op == other.op
+            and self.lhs == other.lhs
+            and self.rhs == other.rhs
+        )
 
 
 def LogicalEqual(lhs: Expression, rhs: Expression) -> BinaryOperation:
@@ -174,82 +215,9 @@ class Predicate:
     def __init__(self, predicate: Expression):
         self.predicate = predicate
 
-    @classmethod
-    def from_json(cls, value: dict) -> "Predicate":
-        return Expression.from_json(value)
-
-    def evaluate(self) -> str:
-        result = self.predicate.evaluate()
-
-
-# ---------------------------------------------------------------------------- #
-# tests
-# ---------------------------------------------------------------------------- #
-
-
-def test_Field():
-    assert Field("foo").evaluate() == "foo"
-
-
-def test_Literal():
-    assert Literal(7).evaluate() == "7"
-    assert Literal("foo").evaluate() == "'foo'"
-    assert Literal(7.7).evaluate() == "7.7"
-    assert Literal(True).evaluate() == "True"
-
-
-def test_BinaryOperation(subtests):
-    f1 = Field("A")
-    f2 = Field("B")
-    v1 = Literal(7)
-    v2 = Literal(7.7)
-    for op in [
-        BinaryOperator.NOTEQUAL,
-        BinaryOperator.EQUAL,
-        BinaryOperator.AND,
-        BinaryOperator.OR,
-        BinaryOperator.LT,
-        BinaryOperator.LTE,
-        BinaryOperator.GT,
-        BinaryOperator.GTE,
-    ]:
-        with subtests.test(msg=f"operator {op.value}"):
-            # basic
-            assert BinaryOperation(op, f1, v1).evaluate() == f"(A) {op.value} (7)"
-            assert BinaryOperation(op, v1, f1).evaluate() == f"(7) {op.value} (A)"
-            assert BinaryOperation(op, f1, f1).evaluate() == f"(A) {op.value} (A)"
-            assert BinaryOperation(op, v1, v1).evaluate() == f"(7) {op.value} (7)"
-
-            # compound
-            eq1 = LogicalEqual(f1, v1)
-            eq2 = LogicalEqual(f2, v2)
-            compound = BinaryOperation(op, eq1, eq2)
-            assert compound.evaluate() == f"((A) = (7)) {op.value} ((B) = (7.7))"
-
-
-def test_UnaryPrefixOperation(subtests):
-    f1 = Field("A")
-    f2 = Field("B")
-    v1 = Literal(7)
-    v2 = Literal(7.7)
-    op = UnaryPrefixOperator.NOT
-
-    # basic
-    assert UnaryPrefixOperation(op, f1).evaluate() == f"{op.value} (A)"
-    assert UnaryPrefixOperation(op, v1).evaluate() == f"{op.value} (7)"
-
-    # compound
-    eq1 = LogicalEqual(f2, v2)
-    compound = UnaryPrefixOperation(op, eq1)
-    assert compound.evaluate() == f"{op.value} ((B) = (7.7))"
-
-
-# @pytest.fixture()
-# def trival():
-#     value = dict(operator="=", field="A", value="7")
-#     return value
-#
-#
-# def test_foo(trival):
-#     print(trival)
-#     assert True
+    # @classmethod
+    # def from_json(cls, value: dict) -> "Predicate":
+    #     return Expression.from_json(value)
+    #
+    # def evaluate(self) -> str:
+    #     result = self.predicate.evaluate()
